@@ -1,0 +1,37 @@
+[project]
+name = "medicalintegencesystem"
+version = "0.1.0"
+description = "Medical Research Intelligence System using CrewAI — 6-agent pipeline for medical literature analysis"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[tools]==1.12.2",
+    "requests>=2.31.0",
+    "PyMuPDF>=1.23.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.7.0",
+    "tenacity>=8.2.0",
+]
+
+[project.scripts]
+medicalintegencesystem = "medicalintegencesystem.main:run"
+run_crew = "medicalintegencesystem.main:run"
+train = "medicalintegencesystem.main:train"
+replay = "medicalintegencesystem.main:replay"
+test = "medicalintegencesystem.main:test"
+run_with_trigger = "medicalintegencesystem.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
+
+[tool.uv]
+constraint-dependencies = [
+    "lancedb>=0.17.0; sys_platform != 'win32'"
+]
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'"
+]

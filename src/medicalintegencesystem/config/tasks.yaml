@@ -1,0 +1,178 @@
+
+
+query_decomposition_task:
+  description: >
+    Analyze the medical research query: "{research_query}"
+
+    Your job is to:
+    1. Identify the core clinical question and its sub-components (condition, intervention,
+       population, outcome — PICO framework).
+    2. Generate 3-5 targeted PubMed search strings using MeSH terms and Boolean operators.
+    3. Identify relevant clinical trial keywords for ClinicalTrials.gov search.
+    4. Define the scope: primary focus areas, time range (prioritize last {max_papers} papers
+       from {current_year} going back 5 years), and evidence type priorities (RCTs > cohort
+       studies > case series).
+    5. Create a clear research brief that all downstream agents will use as their guide.
+
+    Output a structured research brief with search strategies for each specialist.
+  expected_output: >
+    A structured JSON-formatted research brief containing:
+    - "clinical_question": parsed PICO components
+    - "pubmed_search_strings": list of 3-5 optimized PubMed queries with MeSH terms
+    - "clinical_trial_keywords": list of relevant terms for ClinicalTrials.gov
+    - "scope": dict with time_range, evidence_types, focus_areas
+    - "research_priority_order": ordered list of what to prioritize
+  agent: research_coordinator
+
+literature_search_task:
+  description: >
+    Using the research brief from the coordinator, conduct a comprehensive PubMed
+    literature search for the query: "{research_query}"
+
+    Your job is to:
+    1. Execute the provided PubMed search strings using the PubMed Search Tool.
+    2. Retrieve metadata (title, authors, journal, year, PMID, abstract, DOI) for
+       up to {max_papers} most relevant papers.
+    3. Filter results: prioritize papers published in high-impact journals
+       (NEJM, Lancet, JAMA, BMJ, Nature Medicine, PLOS Medicine).
+    4. Flag papers with available full-text PDF links (PMC open access).
+    5. Rank papers by relevance and citation impact.
+    6. For the top 3 papers with accessible PDFs, attempt full-text extraction
+       using the PDF Text Extractor Tool.
+
+    Be thorough but focused — quality over quantity.
+  expected_output: >
+    A structured list of up to {max_papers} papers, each containing:
+    - PMID, title, authors (first 3 + et al.), journal, year, impact_factor_tier
+    - abstract (full text if available via PDF extractor, else abstract)
+    - doi, pubmed_url
+    - relevance_score (1-10) with justification
+    - key_findings_preview (2-3 sentence summary)
+    Sorted by relevance_score descending. Include a search_summary at the top.
+  agent: literature_scout
+
+paper_analysis_task:
+  description: >
+    Perform deep analysis of all papers retrieved by the Literature Scout for the
+    query: "{research_query}"
+
+    For EACH paper in the retrieved list, extract and analyze:
+    1. Study Design: (RCT, cohort, meta-analysis, case-control, systematic review, etc.)
+    2. Population: sample size, demographics, inclusion/exclusion criteria
+    3. Intervention(s) and comparator(s)
+    4. Primary and secondary outcomes
+    5. Key statistical results: effect sizes, p-values, confidence intervals, NNT/NNH
+    6. Study limitations and potential biases (selection bias, confounding, etc.)
+    7. Conclusions drawn by authors vs. your critical appraisal
+
+    Then produce a CROSS-PAPER SYNTHESIS:
+    - Areas of consensus across papers
+    - Contradictions or conflicting findings
+    - Research gaps identified
+    - Strongest evidence (highest quality studies)
+  expected_output: >
+    A detailed analytical report containing:
+    1. Individual paper analyses (structured dict per paper)
+    2. Cross-paper synthesis section with:
+       - consensus_findings (list)
+       - contradictions (list with explanation)
+       - evidence_strength_ranking (papers ranked by methodology quality)
+       - research_gaps (list)
+       - clinical_implications (narrative paragraph)
+  agent: paper_analysis
+
+clinical_data_task:
+  description: >
+    Retrieve and interpret clinical trial data for: "{research_query}"
+
+    Using the Clinical Trials Search Tool:
+    1. Search ClinicalTrials.gov for relevant completed/active trials.
+    2. For each relevant trial, extract: NCT ID, title, phase, status, enrollment,
+       sponsor, interventions, primary endpoints, results (if available).
+    3. Prioritize Phase 3 and Phase 2/3 trials with published results.
+    4. Interpret statistical outcomes: hazard ratios, ORs, RRs, ARR, NNT, p-values,
+       confidence intervals.
+    5. Compare treatment arms: efficacy vs. safety profiles.
+    6. Summarize the current clinical trial landscape: what's proven, what's being tested.
+    7. Identify any breakthrough therapy designations or FDA/EMA approvals relevant
+       to this query.
+  expected_output: >
+    A clinical trials intelligence report containing:
+    - trials_summary: total found, phases breakdown, recruitment status distribution
+    - key_trials: list of top 5-8 most relevant trials with full details
+    - efficacy_comparison: table-like comparison of interventions and their outcomes
+    - safety_signals: notable adverse events across trials
+    - regulatory_landscape: approvals, designations, guideline recommendations
+    - clinical_takeaways: 3-5 bullet points on what the trial data tells us
+  agent: clinical_data_interpreter
+
+validation_task:
+  description: >
+    Perform rigorous quality assurance and fact-checking on all research findings
+    compiled for the query: "{research_query}"
+
+    Your validation checklist:
+    1. MEDICAL TERMINOLOGY: Verify all medical terms are used correctly. Flag any
+       ambiguous or incorrect usage.
+    2. STATISTICAL CLAIMS: Verify that statistical interpretations are correct
+       (e.g., p<0.05 correctly interpreted, confidence intervals understood,
+       relative vs. absolute risk not confused).
+    3. DRUG/TREATMENT INFORMATION: Check any drug names, dosages, mechanisms of
+       action, and contraindications for accuracy.
+    4. CLAIM SUPPORT: Ensure every major claim is backed by a specific citation.
+       Flag any unsupported assertions.
+    5. EVIDENCE GRADING: Apply GRADE criteria to rate each key finding:
+       High / Moderate / Low / Very Low confidence.
+    6. CONTRADICTIONS: Identify any contradictions between the paper analysis and
+       clinical trial sections.
+    7. BIAS CHECK: Note any potential conflicts of interest in the research
+       (industry-funded studies, etc.).
+
+    Produce a validation report with a clear PASS/FLAG/FAIL for each section.
+  expected_output: >
+    A validation report containing:
+    - overall_quality_score: (1-10) with justification
+    - section_validations: dict with pass/flag/fail for each content area
+    - terminology_issues: list of any corrections needed
+    - statistical_corrections: list of any misinterpretations found
+    - unsupported_claims: list of claims needing citation
+    - evidence_grades: dict mapping key findings to GRADE levels (High/Moderate/Low/Very Low)
+    - conflict_of_interest_notes: any industry funding patterns noted
+    - approved_for_report: boolean with reasoning
+    - final_corrections_list: ordered list of corrections to apply before report generation
+  agent: medical_knowledge_validator
+
+report_generation_task:
+  description: >
+    Generate a comprehensive, publication-quality medical research report for the
+    query: "{research_query}" incorporating all validated findings.
+
+    Apply all corrections from the validation report. The report MUST include:
+
+    1. TITLE PAGE: Title, date ({current_year}), research query
+    2. EXECUTIVE SUMMARY: 200-word overview of key findings for busy clinicians
+    3. BACKGROUND & INTRODUCTION: Clinical context, disease burden, why this matters
+    4. METHODOLOGY: How the research was conducted (search strategy, databases used,
+       inclusion criteria, number of papers analyzed)
+    5. KEY LITERATURE FINDINGS: Organized by theme, with paper citations
+    6. CLINICAL TRIAL EVIDENCE: Trial data summary with efficacy/safety comparison
+    7. EVIDENCE QUALITY ASSESSMENT: GRADE table for key recommendations
+    8. CLINICAL RECOMMENDATIONS: Practical, actionable guidance based on evidence
+    9. RESEARCH GAPS & FUTURE DIRECTIONS: What we still don't know
+    10. REFERENCES: Full Vancouver/NLM style reference list (numbered)
+    11. APPENDIX: Search strings used, PRISMA-style search summary
+
+    Use the Report Generator Tool to save the final document.
+    Formatting: Clean markdown with headers, bullet points, and tables where applicable.
+    Tone: Professional, evidence-based, appropriate for clinicians and researchers.
+  expected_output: >
+    A complete, well-structured medical research report in markdown format saved to
+    the output directory. The report must be:
+    - Minimum 1500 words of substantive content
+    - All claims properly cited with [Author et al., Year] inline citations
+    - Vancouver-style numbered reference list at the end
+    - Evidence grades (GRADE) clearly marked for key recommendations
+    - Executive summary suitable for clinical decision-making
+    - Saved to output/medical_research_report_{current_year}.md
+  agent: report_synthesis
+  output_file: "output/medical_research_report.md"
